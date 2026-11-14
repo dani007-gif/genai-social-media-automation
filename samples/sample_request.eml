@@ -1,0 +1,48 @@
+From: Jane Doe <Jane@AcmeCoffee.com>
+To: posts@agency.com
+Subject: Instagram post for our autumn launch
+Date: Tue, 10 Nov 2026 09:15:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="===============2211352112118487798=="
+
+--===============2211352112118487798==
+Content-Type: multipart/alternative;
+ boundary="===============3092193485775665565=="
+
+--===============3092193485775665565==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Hi team,
+
+Please create an Instagram post (1080x1080) for Acme Coffee's new Pumpkin Spi=
+ce Latte.
+Must have: our logo in the bottom-right corner, the price (4.50 EUR).
+Nice to have: autumn leaves, warm tones.
+Do not include: people's faces.
+
+Thanks,
+Jane
+
+On Fri, 7 Nov 2026, Agency <posts@agency.com> wrote:
+> Send us your next request anytime.
+
+--===============3092193485775665565==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+MIME-Version: 1.0
+
+<p>Hi team,</p><p>Please create an <b>Instagram post</b> (1080x1080)...</p>
+
+--===============3092193485775665565==--
+
+--===============2211352112118487798==
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="acme logo.png"
+MIME-Version: 1.0
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9
+awAAAABJRU5ErkJggg==
+
+--===============2211352112118487798==--
