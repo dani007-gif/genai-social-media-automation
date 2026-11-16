@@ -4,3 +4,5 @@ data/
 __pycache__/
 .venv/
 .env
+token_json_explained.pdf
+Gmail_Email_Intake_Setup_Pipeline.pdf

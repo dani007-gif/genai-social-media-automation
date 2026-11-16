@@ -54,3 +54,30 @@ class IncomingEmail:
 
     def to_json(self, **kwargs) -> str:
         return json.dumps(self.to_dict(), ensure_ascii=False, **kwargs)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "IncomingEmail":
+        """Rebuild from the JSON saved in data/intake/ (ignores derived keys like needs_vision)."""
+        att_fields = {"filename", "mime_type", "size_bytes", "path", "is_inline", "content_id"}
+        attachments = [
+            Attachment(**{k: v for k, v in a.items() if k in att_fields})
+            for a in d.get("attachments", [])
+        ]
+        return cls(
+            message_id=d["message_id"],
+            thread_id=d.get("thread_id"),
+            sender=d.get("sender", ""),
+            sender_email=d.get("sender_email", ""),
+            to=d.get("to", []),
+            subject=d.get("subject", ""),
+            date=d.get("date"),
+            body_text=d.get("body_text", ""),
+            body_html=d.get("body_html"),
+            attachments=attachments,
+            source=d.get("source", "gmail"),
+        )
+
+    @classmethod
+    def load(cls, path: str) -> "IncomingEmail":
+        with open(path, encoding="utf-8") as f:
+            return cls.from_dict(json.load(f))
