@@ -139,6 +139,13 @@ class KPIExtractor:
                 betas=["server-side-fallback-2026-07-01"],
                 fallbacks="default",
             )
+        except TypeError as e:  # the SDK raises this when it finds no API key at all
+            if "authentication" not in str(e).lower():
+                raise
+            raise ExtractionError(
+                "No Anthropic API key found. Set ANTHROPIC_API_KEY, "
+                "or add --backend ollama to use the local model."
+            ) from e
         except anthropic.AuthenticationError as e:
             raise ExtractionError("Invalid or missing ANTHROPIC_API_KEY.") from e
         except anthropic.BadRequestError as e:
