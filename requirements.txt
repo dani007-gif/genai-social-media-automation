@@ -2,7 +2,12 @@ google-api-python-client>=2.100
 google-auth>=2.23
 google-auth-oauthlib>=1.1
 
-# LLM1 (KPI extraction). anthropic 1.x needs Python >= 3.10; this project's venv is 3.9,
-# so stay on the 0.x line (0.125 is the last release for 3.9).
+# LLM1-LLM3 with --backend claude. The project's venv is Python 3.12 now, so anthropic 1.x
+# would install, but llm_backends.py uses the 0.x beta call client.beta.messages.parse(output_format=...);
+# stay on 0.125 until that call is checked against 1.x.
 anthropic>=0.125,<1
 pydantic>=2.5
+
+# LLM3 with --judge-backend laya (runs on this computer, no server). Brings PyTorch (~1 GB).
+# Pinned to the tested version so a new release cannot change the judge's answers unnoticed.
+laya==0.4.35

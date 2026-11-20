@@ -4,8 +4,10 @@ Two backends, same result (an LLMAnswer):
 - ask_claude: Anthropic API. Paid, needs ANTHROPIC_API_KEY.
 - ask_ollama: a model running on this computer. Free, needs the Ollama app to be open.
 
-Used by the text-only LLM steps (LLM2 ideation onwards). LLM1 keeps its own calls in
+ask_claude and ask_ollama are used by LLM2 (ideation). LLM1 keeps its own calls in
 kpi_extraction/ because it also sends images.
+
+Plus ask_laya for LLM3 (judging), which only uses Laya: runs on this computer inside this process.
 """
 from __future__ import annotations
 
@@ -126,18 +128,21 @@ def ask_ollama(
         "shift": False,      # same for the answer: stop instead of dropping earlier text
         "options": {"temperature": temperature, "num_ctx": num_ctx},
     }
-    request = urllib.request.Request(
-        OLLAMA_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-    )
     try:
-        with urllib.request.urlopen(request, timeout=OLLAMA_TIMEOUT_SECONDS) as response:
-            answer = json.loads(response.read())
+        answer = _post_to_ollama(payload)
     except urllib.error.HTTPError as e:  # Ollama answered, but with an error
         detail = e.read().decode("utf-8", errors="replace")
-        hint = " Set SMM_OLLAMA_NUM_CTX to a bigger number." if "context size" in detail else ""
-        raise LLMError(f"Ollama error {e.code}: {detail}{hint}") from e
+        if "think" not in detail.lower():
+            hint = " Set SMM_OLLAMA_NUM_CTX to a bigger number." if "context size" in detail else ""
+            raise LLMError(f"Ollama error {e.code}: {detail}{hint}") from e
+        # Models without a thinking mode (for example llama3.2) may reject the "think" setting.
+        del payload["think"]
+        try:
+            answer = _post_to_ollama(payload)
+        except urllib.error.HTTPError as e2:
+            raise LLMError(f"Ollama error {e2.code}: {e2.read().decode('utf-8', errors='replace')}") from e2
+        except OSError as e2:
+            raise LLMError(f"Could not get an answer from Ollama at {OLLAMA_URL}. Is the Ollama app running?") from e2
     except OSError as e:  # nothing listening on the port, or no answer in time
         raise LLMError(f"Could not get an answer from Ollama at {OLLAMA_URL}. Is the Ollama app running?") from e
 
@@ -159,6 +164,79 @@ def ask_ollama(
             "output_tokens": answer.get("eval_count", 0),
         },
     )
+
+
+# Laya (huggingface.co/convaiinnovations/laya) is a decision model, not a chat model: it answers
+# typed questions (yes/no, choice, 1-N score) about a "state" with probabilities, and never writes
+# text. By default it runs inside this Python process (the `laya` package, see requirements.txt):
+# no server, no port. Set SMM_LAYA_URL only to use a separate `laya-serve` server instead.
+LAYA_URL = os.getenv("SMM_LAYA_URL")
+LAYA_API_KEY = os.getenv("SMM_LAYA_API_KEY") or os.getenv("LAYA_API_KEY")
+LAYA_TIMEOUT_SECONDS = 300
+
+# Loaded on the first Laya question and reused for the rest of the run, so the model is read
+# from disk once per run instead of once per idea.
+_laya_router = None
+
+
+def ask_laya(state, questions: dict, model: Optional[str] = None) -> dict:
+    """Ask Laya the questions about one state and return its raw answer:
+    {"model": ..., "answers": {question_id: {...}}, "usage": {...}}.
+    `model` pins a checkpoint (for example "multilingual"); None lets Laya choose."""
+    if LAYA_URL:
+        return _ask_laya_server(state, questions, model)
+    return _ask_laya_local(state, questions, model)
+
+
+def _ask_laya_local(state, questions: dict, model: Optional[str]) -> dict:
+    global _laya_router
+    try:
+        import laya  # imported here so the Claude and Ollama paths do not load PyTorch
+    except ImportError as e:
+        raise LLMError("The laya package is not installed. Run: .venv/bin/pip install -r requirements.txt") from e
+    try:
+        if _laya_router is None:
+            # max_loaded=1: keep only one checkpoint (~600 MB) in memory, for an 8 GB Mac.
+            # The first run downloads it from Hugging Face (~650 MB) into ~/.cache/huggingface.
+            _laya_router = laya.Router(max_loaded=1)
+        answer = _laya_router.predict(state, questions, model=model)
+    except Exception as e:  # download, loading or question errors all come back as LLMError
+        raise LLMError(f"Laya failed: {_short(e)}") from e
+    if not isinstance(answer, dict) or not isinstance(answer.get("answers"), dict):
+        raise LLMError("Laya's answer has no 'answers' field.")
+    return answer
+
+
+def _ask_laya_server(state, questions: dict, model: Optional[str]) -> dict:
+    """Same question, sent to a separate laya-serve server at SMM_LAYA_URL."""
+    payload = {"state": state, "questions": questions}
+    if model:
+        payload["model"] = model
+    headers = {"Content-Type": "application/json"}
+    if LAYA_API_KEY:
+        headers["Authorization"] = f"Bearer {LAYA_API_KEY}"
+    request = urllib.request.Request(LAYA_URL, data=json.dumps(payload).encode("utf-8"), headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=LAYA_TIMEOUT_SECONDS) as response:
+            answer = json.loads(response.read())
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        raise LLMError(f"Laya error {e.code}: {_short(Exception(detail))}") from e
+    except OSError as e:
+        raise LLMError(f"Could not get an answer from Laya at {LAYA_URL}. Is laya-serve running?") from e
+    if not isinstance(answer.get("answers"), dict):
+        raise LLMError("Laya's answer has no 'answers' field.")
+    return answer
+
+
+def _post_to_ollama(payload: dict) -> dict:
+    request = urllib.request.Request(
+        OLLAMA_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=OLLAMA_TIMEOUT_SECONDS) as response:
+        return json.loads(response.read())
 
 
 def _short(error: Exception, limit: int = 300) -> str:

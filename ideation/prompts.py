@@ -70,10 +70,16 @@ def build_system_prompt(count: int) -> str:
     return SYSTEM_PROMPT.format(count=count)
 
 
+def clean_brief(kpis: dict) -> dict:
+    """The brief from LLM1 without the request check and without empty fields.
+    Also used by LLM3 (judging/), so both steps read the brief the same way."""
+    brief = {k: v for k, v in kpis.items() if k not in ("is_post_request", "not_a_request_reason")}
+    return _drop_empty(brief)
+
+
 def build_user_text(kpis: dict, count: int) -> str:
     """The user message: the brief from LLM1, with empty fields removed."""
-    brief = {k: v for k, v in kpis.items() if k not in ("is_post_request", "not_a_request_reason")}
-    brief = _drop_empty(brief)
+    brief = clean_brief(kpis)
     return (
         f"Propose {count} ideas for this post.\n\n"
         "<brief>\n"
